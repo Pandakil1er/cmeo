@@ -1,8 +1,11 @@
 #include "compiler.h"
+#include "chunk.h"
 #include "common.h"
 #include "scanner.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
 
 typedef struct {
   Token current;
@@ -12,6 +15,10 @@ typedef struct {
 } Parser;
 
 Parser parser;
+Chunk *compilingChunk;
+
+static Chunk *currentChunk() { return compilingChunk; }
+
 static void errorAt(Token *token, const char *message) {
   if (parser.panicMode)
     return;
@@ -53,12 +60,27 @@ static void consume(TokenType type, const char *message) {
   errorAtCurrent(message);
 }
 
+static void emitByte(uint8_t byte) {
+  writeChunk(currentChunk(), byte, parser.previous.line);
+}
+
+static void emitBytes(uint8_t byte1, uint8_t byte2) {
+  emitByte(byte1);
+  emitByte(byte2);
+}
+
+static void emitReturn() { emitByte(OP_RETURN); }
+
+static void endCompiler() { emitReturn(); }
+
 bool compile(const char *source, Chunk *chunk) {
   initScanner(source);
+  compilingChunk = chunk;
   parser.panicMode = false;
   parser.hadError = false;
   advance();
   expression();
   consume(TOKEN_EOF, "Expect end of expression");
+  endCompiler();
   return !parser.hadError;
 }
